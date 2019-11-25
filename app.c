@@ -26,6 +26,10 @@
 #include "buttons.h"
 #include "leds.h"
 
+/* Sensors headers */
+#include "accelerometer.h"
+#include "flex_sensors.h"
+
 /* Display Interface header */
 #include "display_interface.h"
 
@@ -96,6 +100,7 @@ void gecko_bgapi_classes_init(void)
   gecko_bgapi_class_mesh_proxy_init();
   gecko_bgapi_class_mesh_proxy_server_init();
   gecko_bgapi_class_mesh_sensor_client_init();
+  gecko_bgapi_class_mesh_friend_init();
 }
 
 /*******************************************************************************
@@ -121,6 +126,8 @@ void appMain(gecko_configuration_t *pConfig)
   // led_init() is called later as needed to (re)initialize the LEDs
   led_init();
   button_init();
+
+  accelerometer_init();
 
   while (1) {
     // Event pointer for handling events
@@ -424,6 +431,7 @@ void handle_timer_event(uint8_t handle)
  ******************************************************************************/
 void handle_external_signal_event(uint8_t signal)
 {
+  // TODO: Modify signals to be bitwise and change logic to case statements
   if (signal & EXT_SIGNAL_PB0_PRESS) {
     printf("PB0 pressed\r\n");
     sensor_client_change_property();
@@ -434,6 +442,10 @@ void handle_external_signal_event(uint8_t signal)
     gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(2000),
                                       TIMER_ID_SENSOR_DATA,
                                       0);
+  }
+  if (signal & EXT_SIGNAL_ADC_READING)
+  {
+
   }
 }
 
