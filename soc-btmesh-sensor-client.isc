@@ -113,12 +113,12 @@ appPlugin: slot-manager=false
     "PID": "0xf0b0",
     "VID": "0x1234",
     "CRPL": "0x0020",
-    "Features": "0x0003",
+    "Features": "0x0007",
     "Elements": [
       \{
         "Name": "Primary Element",
         "Loc": "0x0000",
-        "NumS": "3",
+        "NumS": "4",
         "NumV": "0",
         "SIG Models": [
           "0x0000",
@@ -126,7 +126,9 @@ appPlugin: slot-manager=false
           "0x0002",
           "Health Server",
           "0x1102",
-          "Sensor Client"]
+          "Sensor Client",
+          "0x1000",
+          "Generic OnOff Server"]
         ,
         "Vendor Models": [
           ]
@@ -134,7 +136,7 @@ appPlugin: slot-manager=false
   \},
   "Memory configuration": \{
     "MAX_ELEMENTS": "1",
-    "MAX_MODELS": "3",
+    "MAX_MODELS": "4",
     "MAX_APP_BINDS": "4",
     "MAX_SUBSCRIPTIONS": "4",
     "MAX_NETKEYS": "4",
@@ -152,10 +154,10 @@ appPlugin: slot-manager=false
     "MAX_PROVISIONED_DEVICE_NETKEYS": "0",
     "MAX_PROVISIONED_DEVICE_APPKEYS": "0",
     "MAX_FOUNDATION_CLIENT_CMDS": "0",
-    "MAX_FRIENDSHIPS": "1",
+    "MAX_FRIENDSHIPS": "3",
     "FRIEND_MAX_SUBS_LIST": "5",
-    "FRIEND_MAX_TOTAL_CACHE": "5",
-    "FRIEND_MAX_SINGLE_CACHE": "5"
+    "FRIEND_MAX_TOTAL_CACHE": "6",
+    "FRIEND_MAX_SINGLE_CACHE": "3"
   \}
 \}
 }

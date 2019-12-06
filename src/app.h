@@ -1,6 +1,6 @@
 /***************************************************************************//**
- * @file  buttons.h
- * @brief Buttons header file
+ * @file  app.h
+ * @brief Application header file
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -15,37 +15,53 @@
  *
  ******************************************************************************/
 
-#ifndef BUTTONS_H
-#define BUTTONS_H
+#ifndef APP_H
+#define APP_H
+
+#include <gecko_configuration.h>
+#include "utils.h"
 
 /***************************************************************************//**
- * @defgroup Buttons Buttons Module
- * @brief Buttons Module Implementation
+ * @defgroup app Application Code
+ * @brief Sample Application Implementation
  ******************************************************************************/
 
 /***************************************************************************//**
- * @addtogroup Buttons
+ * @addtogroup Application
  * @{
  ******************************************************************************/
 
-/*******************************************************************************
- * External signal definitions. These are used to signal button press events
- * from GPIO interrupt handler to application.
+/***************************************************************************//**
+ * @addtogroup app
+ * @{
  ******************************************************************************/
-#define EXT_SIGNAL_PB0_PRESS      0x01
-#define EXT_SIGNAL_PB1_PRESS      0x02
+
+typedef enum
+{
+	PB0_PRESS              = BIT(0),
+	PB1_PRESS              = BIT(1),
+	ACC_MEASURE            = BIT(2),
+	ACC_TIMER_WAIT         = BIT(3),
+	ACC_MEASURE_DONE       = BIT(4),
+	FLEX_MEASURE           = BIT(5),
+	FLEX_TIMER_WAIT        = BIT(6),
+	FLEX_TRANSFER_COMPLETE = BIT(7)
+} EXT_SIGNAL_e;
+
+typedef enum
+{
+	DEVICE_OFF,
+	DEVICE_ON
+} DEVICE_STATE_e;
+
 
 /***************************************************************************//**
- * Button initialization. Configure pushbuttons PB0, PB1 as inputs.
+ * Main application code.
+ * @param[in] pConfig  Pointer to stack configuration.
  ******************************************************************************/
-void button_init(void);
+void appMain(gecko_configuration_t *pConfig);
 
-/***************************************************************************//**
- * Enable button interrupts for PB0, PB1. Both GPIOs are configured to trigger
- * an interrupt on the rising edge (button released).
- ******************************************************************************/
-void enable_button_interrupts(void);
+/** @} (end addtogroup app) */
+/** @} (end addtogroup Application) */
 
-/** @} (end addtogroup Buttons) */
-
-#endif /* BUTTONS_H */
+#endif /* APP_H */

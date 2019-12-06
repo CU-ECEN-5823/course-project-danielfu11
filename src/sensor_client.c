@@ -1,6 +1,7 @@
 /***************************************************************************//**
  * @file  sensor_client.c
  * @brief Sensor client module
+ * @note  Modified by Guanxiong Fu
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -36,7 +37,7 @@
 #define NO_FLAGS              0 ///< No flags used for message
 #define SIZE_OF_DESCRIPTOR    8 ///< The size of descriptor is 8 bytes
 #define DISPLAYED_SENSORS     5 ///< There is place for 5 sensors on the display
-#define PROPERTIES_NUMBER     2 ///< Number of supported properties
+#define PROPERTIES_NUMBER     3 ///< Number of supported properties
 #define PROPERTY_ID_SIZE      2 ///< Size of property ID in bytes
 #define PROPERTY_HEADER_SIZE  3 ///< Size of property header in bytes
 
@@ -49,7 +50,8 @@ static uint8_t current_property = 0;
 /// Property IDs supported by application
 static const mesh_device_properties_t properties[PROPERTIES_NUMBER] = {
   PRESENT_AMBIENT_TEMPERATURE,
-  PEOPLE_COUNT
+  AVERAGE_OUTPUT_VOLTAGE,
+
 };
 
 /*******************************************************************************

@@ -1,6 +1,7 @@
 /***************************************************************************//**
- * @file  app.h
- * @brief Application header file
+ * @file  buttons.h
+ * @brief Buttons header file
+ * @note  Modified by Guanxiong Fu
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -15,33 +16,30 @@
  *
  ******************************************************************************/
 
-#ifndef APP_H
-#define APP_H
-
-#include <gecko_configuration.h>
+#ifndef BUTTONS_H
+#define BUTTONS_H
 
 /***************************************************************************//**
- * @defgroup app Application Code
- * @brief Sample Application Implementation
+ * @defgroup Buttons Buttons Module
+ * @brief Buttons Module Implementation
  ******************************************************************************/
 
 /***************************************************************************//**
- * @addtogroup Application
+ * @addtogroup Buttons
  * @{
  ******************************************************************************/
 
 /***************************************************************************//**
- * @addtogroup app
- * @{
+ * Button initialization. Configure pushbuttons PB0, PB1 as inputs.
  ******************************************************************************/
+void button_init(void);
 
 /***************************************************************************//**
- * Main application code.
- * @param[in] pConfig  Pointer to stack configuration.
+ * Enable button interrupts for PB0, PB1. Both GPIOs are configured to trigger
+ * an interrupt on the rising edge (button released).
  ******************************************************************************/
-void appMain(gecko_configuration_t *pConfig);
+void enable_button_interrupts(void);
 
-/** @} (end addtogroup app) */
-/** @} (end addtogroup Application) */
+/** @} (end addtogroup Buttons) */
 
-#endif /* APP_H */
+#endif /* BUTTONS_H */

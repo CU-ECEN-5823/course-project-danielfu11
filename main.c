@@ -29,7 +29,7 @@
 #include "hal-config.h"
 
 /* Application code */
-#include "app.h"
+#include "src/app.h"
 
 /***************************************************************************//**
  * @addtogroup Application
