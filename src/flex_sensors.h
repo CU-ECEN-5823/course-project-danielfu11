@@ -30,6 +30,7 @@
 #include "letimer.h"
 #include "leds.h"
 #include "app.h"
+#include "utils.h"
 
 /* Bluetooth stack headers */
 #include "bg_types.h"
@@ -50,11 +51,12 @@
 // Currently only for 1 finger
 typedef enum
 {
-	FLEX_OFF = 0,
-	FLEX_POWER_ON = 1,
-	FLEX_WRITE_COMPLETE = 2,
+	FLEX_OFF                 = 0,
+	FLEX_POWER_ON            = 1,
+	FLEX_CONFIG_COMPLETE     = 2,
 	FLEX_CONVERSION_COMPLETE = 3,
-	FLEX_READ_COMPLETE = 4,
+	FLEX_READ_READY          = 4,
+	FLEX_READ_COMPLETE       = 5,
 } FLEX_STATE_e;
 
 
@@ -62,8 +64,14 @@ typedef enum
  *            P U B L I C   F U N C T I O N   D E C L A R A T I O N S        *
  *****************************************************************************/
 
+void flex_power_on(void);
+
+void flex_power_off(void);
+
 void flex_sensor_state_machine(uint32_t ext_signal);
 
 void flex_sensor_init(void);
+
+void reset_i2c_pins(void);
 
 #endif /* __SRC_FLEX_SENSORS_H__ */

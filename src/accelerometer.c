@@ -166,7 +166,7 @@ static void detect_shake(void)
 	int i;
 	static bool initialized = false;
 	static uint32_t prev_acc[3] = {0, 0, 0};
-	static active_time = 0;
+	static uint8_t active_time = 0;
 	if (!initialized)
 	{
 		for (i=0; i < ADC_INPUTS; ++i)
@@ -183,6 +183,7 @@ static void detect_shake(void)
 	{
 		printf("Device turn on\r\n");
 		led_set_state(LED_STATE_ON);
+		reset_i2c_pins();
 		device_state = DEVICE_ON;
 		active_time = 0;
 	}
@@ -197,6 +198,7 @@ static void detect_shake(void)
 			{
 				printf("Device turn off\r\n");
 				device_state = DEVICE_OFF;
+				flex_power_off();
 				led_set_state(LED_STATE_OFF);
 			}
 		}

@@ -49,9 +49,9 @@ static uint16_t address_table[DISPLAYED_SENSORS];
 static uint8_t current_property = 0;
 /// Property IDs supported by application
 static const mesh_device_properties_t properties[PROPERTIES_NUMBER] = {
-  PRESENT_AMBIENT_TEMPERATURE,
-  AVERAGE_OUTPUT_VOLTAGE,
-
+		AVERAGE_OUTPUT_VOLTAGE,
+		PEOPLE_COUNT,
+		PRESENT_AMBIENT_TEMPERATURE
 };
 
 /*******************************************************************************
@@ -59,14 +59,14 @@ static const mesh_device_properties_t properties[PROPERTIES_NUMBER] = {
  ******************************************************************************/
 void sensor_client_change_property(void)
 {
-  current_property++;
-  if (current_property == PROPERTIES_NUMBER) {
-    current_property = 0;
-  }
-  for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
-    DI_Print("", DI_ROW_SENSOR_DATA + sensor);
-  }
-  printf("New property ID is %4.4x\r\n", properties[current_property]);
+	current_property++;
+	if (current_property == PROPERTIES_NUMBER) {
+		current_property = 0;
+	}
+	for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
+		DI_Print("", DI_ROW_SENSOR_DATA + sensor);
+	}
+	printf("New property ID is %4.4x\r\n", properties[current_property]);
 }
 
 /*******************************************************************************
@@ -75,15 +75,16 @@ void sensor_client_change_property(void)
  ******************************************************************************/
 void sensor_client_publish_get_descriptor_request(void)
 {
-  registered_devices = 0;
-  for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
-    DI_Print("", DI_ROW_SENSOR_DATA + sensor);
-  }
-  gecko_cmd_mesh_sensor_client_get_descriptor(SENSOR_ELEMENT,
-                                              PUBLISH_ADDRESS,
-                                              IGNORED,
-                                              NO_FLAGS,
-                                              properties[current_property]);
+	registered_devices = 0;
+	for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
+		DI_Print("", DI_ROW_SENSOR_DATA + sensor);
+	}
+	gecko_cmd_mesh_sensor_client_get_descriptor(
+			SENSOR_ELEMENT,
+			PUBLISH_ADDRESS,
+			IGNORED,
+			NO_FLAGS,
+			properties[current_property]);
 }
 
 /***************************************************************************//**
@@ -92,21 +93,21 @@ void sensor_client_publish_get_descriptor_request(void)
  * @param[in] pEvt  Pointer to sensor client descriptor status event.
  ******************************************************************************/
 void handle_sensor_client_descriptor_status(
-  struct gecko_msg_mesh_sensor_client_descriptor_status_evt_t *pEvt)
+		struct gecko_msg_mesh_sensor_client_descriptor_status_evt_t *pEvt)
 {
-  printf("evt:gecko_evt_mesh_sensor_client_descriptor_status_id\r\n");
+	printf("evt:gecko_evt_mesh_sensor_client_descriptor_status_id\r\n");
 
-  sensor_descriptor_t descriptor;
-  if (pEvt->descriptors.len >= SIZE_OF_DESCRIPTOR) {
-    mesh_lib_sensor_descriptors_from_buf(&descriptor,
-                                         pEvt->descriptors.data,
-                                         SIZE_OF_DESCRIPTOR);
-    if (descriptor.property_id == properties[current_property]
-        && registered_devices < DISPLAYED_SENSORS) {
-      address_table[registered_devices] = pEvt->server_address;
-      registered_devices++;
-    }
-  }
+	sensor_descriptor_t descriptor;
+	if (pEvt->descriptors.len >= SIZE_OF_DESCRIPTOR) {
+		mesh_lib_sensor_descriptors_from_buf(&descriptor,
+				pEvt->descriptors.data,
+				SIZE_OF_DESCRIPTOR);
+		if (descriptor.property_id == properties[current_property]
+												 && registered_devices < DISPLAYED_SENSORS) {
+			address_table[registered_devices] = pEvt->server_address;
+			registered_devices++;
+		}
+	}
 }
 
 /*******************************************************************************
@@ -114,11 +115,12 @@ void handle_sensor_client_descriptor_status(
  ******************************************************************************/
 void sensor_client_publish_get_request(void)
 {
-  gecko_cmd_mesh_sensor_client_get(SENSOR_ELEMENT,
-                                   PUBLISH_ADDRESS,
-                                   IGNORED,
-                                   NO_FLAGS,
-                                   properties[current_property]);
+	gecko_cmd_mesh_sensor_client_get(
+			SENSOR_ELEMENT,
+			PUBLISH_ADDRESS,
+			IGNORED,
+			NO_FLAGS,
+			properties[current_property]);
 }
 
 /***************************************************************************//**
@@ -127,66 +129,69 @@ void sensor_client_publish_get_request(void)
  * @param[in] pEvt  Pointer to sensor client status event.
  ******************************************************************************/
 void handle_sensor_client_status(
-  struct gecko_msg_mesh_sensor_client_status_evt_t *pEvt)
+		struct gecko_msg_mesh_sensor_client_status_evt_t *pEvt)
 {
-  printf("evt:gecko_evt_mesh_sensor_client_status_id\r\n");
-  uint8_t *sensor_data = pEvt->sensor_data.data;
-  uint8_t data_len = pEvt->sensor_data.len;
-  uint8_t pos = 0;
-  for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
-    if (pEvt->server_address == address_table[sensor]) {
-      while (pos < data_len) {
-        if (data_len - pos > PROPERTY_ID_SIZE) {
-          mesh_device_properties_t property_id = (mesh_device_properties_t)(sensor_data[pos] + (sensor_data[pos + 1] << 8));
-          uint8_t property_len = sensor_data[pos + PROPERTY_ID_SIZE];
-          uint8_t *property_data = NULL;
-          if (property_len && (data_len - pos > PROPERTY_HEADER_SIZE)) {
-            property_data = &sensor_data[pos + PROPERTY_HEADER_SIZE];
-          }
-          if (property_id == properties[current_property]) {
-            char tmp[21];
-            switch (property_id) {
-              case PEOPLE_COUNT:
-                if (property_len == 2) {
-                  mesh_device_property_t property = mesh_sensor_data_from_buf(PEOPLE_COUNT, property_data);
-                  count16_t people_count = property.count16;
-                  if (people_count == (count16_t)0xFFFF) {
-                    snprintf(tmp, 21, "Adr %4x Count   N/K", address_table[sensor]);
-                  } else {
-                    snprintf(tmp, 21, "Adr %4x Count %5u", address_table[sensor], people_count);
-                  }
-                } else {
-                  snprintf(tmp, 21, "Adr %4x Count   N/A", address_table[sensor]);
-                }
-                DI_Print(tmp, DI_ROW_SENSOR_DATA + sensor);
-                break;
+	printf("evt:gecko_evt_mesh_sensor_client_status_id\r\n");
+	uint8_t *sensor_data = pEvt->sensor_data.data;
+	uint8_t data_len = pEvt->sensor_data.len;
+	uint8_t pos = 0;
+	for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
+		if (pEvt->server_address == address_table[sensor]) {
+			while (pos < data_len) {
+				if (data_len - pos > PROPERTY_ID_SIZE) {
+					mesh_device_properties_t property_id = (mesh_device_properties_t)(sensor_data[pos] + (sensor_data[pos + 1] << 8));
+					uint8_t property_len = sensor_data[pos + PROPERTY_ID_SIZE];
+					uint8_t *property_data = NULL;
+					if (property_len && (data_len - pos > PROPERTY_HEADER_SIZE)) {
+						property_data = &sensor_data[pos + PROPERTY_HEADER_SIZE];
+					}
+					if (property_id == properties[current_property]) {
+						char tmp[21];
+						switch (property_id) {
+						case PEOPLE_COUNT:
+							if (property_len == 2) {
+								mesh_device_property_t property = mesh_sensor_data_from_buf(PEOPLE_COUNT, property_data);
+								count16_t people_count = property.count16;
+								if (people_count == (count16_t)0xFFFF) {
+									snprintf(tmp, 21, "Adr %4x Count   N/K", address_table[sensor]);
+								} else {
+									snprintf(tmp, 21, "Adr %4x Count %5u", address_table[sensor], people_count);
+								}
+							} else {
+								snprintf(tmp, 21, "Adr %4x Count   N/A", address_table[sensor]);
+							}
+							DI_Print(tmp, DI_ROW_SENSOR_DATA + sensor);
+							break;
 
-              case PRESENT_AMBIENT_TEMPERATURE:
-                if (property_len == 1) {
-                  mesh_device_property_t property = mesh_sensor_data_from_buf(PRESENT_AMBIENT_TEMPERATURE, property_data);
-                  temperature_8_t temperature = property.temperature_8;
-                  if (temperature == (temperature_8_t)0xFF) {
-                    snprintf(tmp, 21, "Adr %4x Temp    N/K", address_table[sensor]);
-                  } else {
-                    snprintf(tmp, 21, "Adr %4x Temp %3d.%1dC", address_table[sensor], temperature / 2, (temperature * 5) % 10);
-                  }
-                } else {
-                  snprintf(tmp, 21, "Adr %4x Temp    N/A", address_table[sensor]);
-                }
-                DI_Print(tmp, DI_ROW_SENSOR_DATA + sensor);
-                break;
+						case PRESENT_AMBIENT_TEMPERATURE:
+							if (property_len == 1) {
+								mesh_device_property_t property = mesh_sensor_data_from_buf(PRESENT_AMBIENT_TEMPERATURE, property_data);
+								temperature_8_t temperature = property.temperature_8;
+								if (temperature == (temperature_8_t)0xFF) {
+									snprintf(tmp, 21, "Adr %4x Temp    N/K", address_table[sensor]);
+								} else {
+									snprintf(tmp, 21, "Adr %4x Temp %3d.%1dC", address_table[sensor], temperature / 2, (temperature * 5) % 10);
+								}
+							} else {
+								snprintf(tmp, 21, "Adr %4x Temp    N/A", address_table[sensor]);
+							}
+							DI_Print(tmp, DI_ROW_SENSOR_DATA + sensor);
+							break;
 
-              default:
-                break;
-            }
-          }
-          pos += PROPERTY_HEADER_SIZE + property_len;
-        } else {
-          pos = data_len;
-        }
-      }
-    }
-  }
+						case AVERAGE_OUTPUT_VOLTAGE:
+							break;
+
+						default:
+							break;
+						}
+					}
+					pos += PROPERTY_HEADER_SIZE + property_len;
+				} else {
+					pos = data_len;
+				}
+			}
+		}
+	}
 }
 
 /*******************************************************************************
@@ -199,20 +204,20 @@ void handle_sensor_client_status(
  ******************************************************************************/
 void handle_sensor_client_events(struct gecko_cmd_packet *pEvt)
 {
-  switch (BGLIB_MSG_ID(pEvt->header)) {
-    case gecko_evt_mesh_sensor_client_descriptor_status_id:
-      handle_sensor_client_descriptor_status(
-        &(pEvt->data.evt_mesh_sensor_client_descriptor_status));
-      break;
+	switch (BGLIB_MSG_ID(pEvt->header)) {
+	case gecko_evt_mesh_sensor_client_descriptor_status_id:
+		handle_sensor_client_descriptor_status(
+				&(pEvt->data.evt_mesh_sensor_client_descriptor_status));
+		break;
 
-    case gecko_evt_mesh_sensor_client_status_id:
-      handle_sensor_client_status(
-        &(pEvt->data.evt_mesh_sensor_client_status));
-      break;
+	case gecko_evt_mesh_sensor_client_status_id:
+		handle_sensor_client_status(
+				&(pEvt->data.evt_mesh_sensor_client_status));
+		break;
 
-    default:
-      break;
-  }
+	default:
+		break;
+	}
 }
 
 /** @} (end addtogroup Sensor) */

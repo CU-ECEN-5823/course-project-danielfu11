@@ -31,6 +31,7 @@
 #include "letimer.h"
 #include "leds.h"
 #include "app.h"
+#include "flex_sensors.h"
 
 /* Bluetooth stack headers */
 #include "bg_types.h"
