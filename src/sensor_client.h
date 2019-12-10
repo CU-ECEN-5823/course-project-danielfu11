@@ -31,7 +31,7 @@
 /***************************************************************************//**
  * It changes currently displayed property ID.
  ******************************************************************************/
-void sensor_client_change_property(void);
+void sensor_client_change_property(uint8_t index);
 
 /***************************************************************************//**
  * Publishing of sensor client get descriptor request for currently displayed

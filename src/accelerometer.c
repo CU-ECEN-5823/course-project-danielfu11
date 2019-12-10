@@ -30,6 +30,7 @@
 #define ACC_PWR_WAIT      2
 // Threshold difference value to determine a shake
 #define SHAKE_THRESHOLD   600
+#define DISCARD_THRESHOLD 1500
 // Timeout to turn device off when there is no shaking movement, 1 unit is 500ms
 #define TIMEOUT           20
 
@@ -177,13 +178,16 @@ static void detect_shake(void)
 	}
 //	printf("X: %d, Y: %d, Z: %d\r\n", current_acc[0], current_acc[1], current_acc[2]);
 	// Determine if there's a shake motion
-	if (abs(prev_acc[0] - current_acc[0]) > SHAKE_THRESHOLD ||
-		abs(prev_acc[1] - current_acc[1]) > SHAKE_THRESHOLD ||
-		abs(prev_acc[2] - current_acc[2]) > SHAKE_THRESHOLD)
+	if ((abs(prev_acc[0] - current_acc[0]) > SHAKE_THRESHOLD ||
+		 abs(prev_acc[1] - current_acc[1]) > SHAKE_THRESHOLD ||
+		 abs(prev_acc[2] - current_acc[2]) > SHAKE_THRESHOLD) &&
+		(abs(prev_acc[0] - current_acc[0]) < DISCARD_THRESHOLD ||
+		 abs(prev_acc[1] - current_acc[1]) < DISCARD_THRESHOLD ||
+		 abs(prev_acc[2] - current_acc[2]) < DISCARD_THRESHOLD))
 	{
 		printf("Device turn on\r\n");
 		led_set_state(LED_STATE_ON);
-		reset_i2c_pins();
+		reset_flex();
 		device_state = DEVICE_ON;
 		active_time = 0;
 	}
@@ -230,7 +234,6 @@ void accelerometer_state_machine(uint32_t ext_signal)
 		case ACC_OFF:
 			if (ext_signal & ACC_MEASURE)
 			{
-				//printf("Power on acc\r\n");
 				// Power on accelerometer
 				acc_power_on();
 				// Wait 1ms of turn on time
@@ -243,7 +246,6 @@ void accelerometer_state_machine(uint32_t ext_signal)
 		case ACC_POWER_ON:
 			if (ext_signal & ACC_TIMER_WAIT)
 			{
-				//printf("Start acc conversion\r\n");
 				// Start next
 				ADC_Start(ADC0, adcStartScan);
 
@@ -254,7 +256,6 @@ void accelerometer_state_machine(uint32_t ext_signal)
 		case ACC_MEASUREMENT_DONE:
 			if (ext_signal & ACC_MEASURE_DONE)
 			{
-				//printf("Detect shake\r\n");
 				// Detect shaking movement and turn device on/off based on results
 				detect_shake();
 				// Power off accelerometer

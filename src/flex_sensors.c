@@ -28,6 +28,12 @@
 // Flex sensors power pin PC6
 #define FLEX_PWR_PORT      gpioPortC
 #define FLEX_PWR_PIN       7
+#define SCL_PORT           gpioPortC
+#define SCL_PIN            10
+#define SDA_PORT           gpioPortC
+#define SDA_PIN            11
+
+#define BEND_THRESHOLD     850
 
 // I2C register addresses
 #define CONFIG_REGISTER        0x01
@@ -40,6 +46,9 @@
 #define SAMPLE_RATE_128HZ      0x0000
 #define ADS1015_CONFIG_PGA_23  0x0080
 #define DISABLE_COMP           BIT(1) | BIT(0)
+
+#define SENSOR_1               1
+#define SENSOR_2               2
 
 #define SENSOR_1_CONFIG        (SINGLE_SHOT | START_CONVERSION | \
 		                        ADC_CHANNEL_0 | SAMPLE_RATE_128HZ | \
@@ -57,12 +66,17 @@ volatile static I2C_TransferReturn_TypeDef	status;
 static I2C_TransferSeq_TypeDef write_cmd;
 static I2C_TransferSeq_TypeDef read_cmd;
 static uint8_t read_buf[2]; // {MSB, LSB}
-static uint8_t write_config_buf[3]= {CONFIG_REGISTER,
-		                             (SENSOR_2_CONFIG & 0xFF00) >> 8,
-									 SENSOR_2_CONFIG & 0x00FF};
-//static uint8_t write_config_buf[3]= {0x01, 0xC1, 0x83};
-static uint8_t write_convert_buf[1] = {CONVERSION_REGISTER};
+static const uint8_t write_config_buf_1[3]= {CONFIG_REGISTER,
+		                                     (SENSOR_1_CONFIG & 0xFF00) >> 8,
+									         SENSOR_1_CONFIG & 0x00FF};
+static const uint8_t write_config_buf_2[3]= {CONFIG_REGISTER,
+		                                     (SENSOR_2_CONFIG & 0xFF00) >> 8,
+									         SENSOR_2_CONFIG & 0x00FF};
+static const uint8_t write_convert_buf[1] = {CONVERSION_REGISTER};
 
+static uint8_t finger1 = 0;
+static uint8_t finger2 = 0;
+static uint8_t finger3 = 0;
 
 // Current and next states for flex sensor measurement
 static FLEX_STATE_e current_flex_state = FLEX_OFF;
@@ -107,16 +121,23 @@ static void set_flex_next_state(FLEX_STATE_e new_state)
 /**
  *
  * @brief Send a write command to config register
- * @param addr 7 bit I2C address to write to
+ * @param addr    7 bit I2C address to write to
+ *        sensor  which sensor to config 1 or 2
  *
  */
-static void I2C_config_write(uint16_t addr)
+static void I2C_config_write(uint16_t addr, uint8_t sensor)
 {
 	write_cmd.addr = addr << 1;
 	write_cmd.flags = I2C_FLAG_WRITE;
-	write_cmd.buf[0].data = write_config_buf;
+	if (sensor == 1)
+	{
+		write_cmd.buf[0].data = write_config_buf_1;
+	}
+	else
+	{
+		write_cmd.buf[0].data = write_config_buf_2;
+	}
 	write_cmd.buf[0].len = 3;
-//	printf("0x%X, 0x%X, 0x%X", write_config_buf[0], write_config_buf[1], write_config_buf[2]);
 	I2C_TransferInit(I2C0, &write_cmd);
 	I2C_IntEnable(I2C0, I2C_FLAG_WRITE);
 }
@@ -208,7 +229,7 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 		case FLEX_POWER_ON:
 			if (ext_signal & FLEX_TIMER_WAIT)
 			{
-				I2C_config_write(FLEX_TWO_ADDR);
+				I2C_config_write(FLEX_ONE_ADDR, SENSOR_1);
 				set_flex_next_state(FLEX_CONFIG_COMPLETE);
 			}
 			break;
@@ -235,7 +256,7 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 		case FLEX_CONVERSION_COMPLETE:
 			if (ext_signal & FLEX_TIMER_WAIT)
 			{
-				I2C_conversion_write(FLEX_TWO_ADDR);
+				I2C_conversion_write(FLEX_ONE_ADDR);
 				set_flex_next_state(FLEX_READ_READY);
 			}
 			break;
@@ -253,7 +274,7 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 				}
 				else
 				{
-					I2C_read(FLEX_TWO_ADDR);
+					I2C_read(FLEX_ONE_ADDR);
 					set_flex_next_state(FLEX_READ_COMPLETE);
 				}
 			}
@@ -267,17 +288,173 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 				{
 					printf("Error occurred during I2C read! Error code is %d\r\n",
 							status);
-//					flex_power_off();
 				}
 				else
 				{
 					// Handle value
-					printf("Flex ADC Value: %d\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
+//					printf("Finger 1: %d\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
+					if ((((read_buf[0] << 8) | read_buf[1]) >> 4) < BEND_THRESHOLD)
+					{
+						finger1 = 1;
+					}
+					I2C_config_write(FLEX_ONE_ADDR, SENSOR_2);
+					set_flex_next_state(FLEX_CONFIG_COMPLETE_2);
 				}
-				flex_power_off();
-				set_flex_next_state(FLEX_OFF);
 			}
 			break;
+
+		case FLEX_CONFIG_COMPLETE_2:
+			if (ext_signal & FLEX_TRANSFER_COMPLETE)
+			{
+				I2C_IntDisable(I2C0, I2C_FLAG_WRITE);
+				if (status != i2cTransferDone)
+				{
+					printf("Error occurred during I2C config write! Error code is %d\r\n",
+							status);
+					flex_power_off();
+					set_flex_next_state(FLEX_OFF);
+				}
+				else
+				{
+					timerSetEventInMs(CONVERSION_WAIT, FLEX_SENSOR);
+					set_flex_next_state(FLEX_CONVERSION_COMPLETE_2);
+				}
+			}
+			break;
+
+		case FLEX_CONVERSION_COMPLETE_2:
+			if (ext_signal & FLEX_TIMER_WAIT)
+			{
+				I2C_conversion_write(FLEX_ONE_ADDR);
+				set_flex_next_state(FLEX_READ_READY_2);
+			}
+			break;
+
+		case FLEX_READ_READY_2:
+			if (ext_signal & FLEX_TRANSFER_COMPLETE)
+			{
+				I2C_IntDisable(I2C0, I2C_FLAG_WRITE);
+				if (status != i2cTransferDone)
+				{
+					printf("Error occurred during I2C conversion write! Error code is %d\r\n",
+							status);
+					flex_power_off();
+					set_flex_next_state(FLEX_OFF);
+				}
+				else
+				{
+					I2C_read(FLEX_ONE_ADDR);
+					set_flex_next_state(FLEX_READ_COMPLETE_2);
+				}
+			}
+			break;
+
+		case FLEX_READ_COMPLETE_2:
+			if (ext_signal & FLEX_TRANSFER_COMPLETE)
+			{
+				I2C_IntDisable(I2C0, I2C_FLAG_READ);
+				if (status != i2cTransferDone)
+				{
+					printf("Error occurred during I2C read! Error code is %d\r\n",
+							status);
+				}
+				else
+				{
+					// Handle value
+//					printf("Finger 2: %d\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
+					if ((((read_buf[0] << 8) | read_buf[1]) >> 4) < BEND_THRESHOLD)
+					{
+						finger2 = 1;
+					}
+					I2C_config_write(FLEX_TWO_ADDR, SENSOR_2);
+					set_flex_next_state(FLEX_CONFIG_COMPLETE_3);
+				}
+			}
+			break;
+
+		case FLEX_CONFIG_COMPLETE_3:
+			if (ext_signal & FLEX_TRANSFER_COMPLETE)
+			{
+				I2C_IntDisable(I2C0, I2C_FLAG_WRITE);
+				if (status != i2cTransferDone)
+				{
+					printf("Error occurred during I2C config write! Error code is %d\r\n",
+							status);
+					flex_power_off();
+					set_flex_next_state(FLEX_OFF);
+				}
+				else
+				{
+					timerSetEventInMs(CONVERSION_WAIT, FLEX_SENSOR);
+					set_flex_next_state(FLEX_CONVERSION_COMPLETE_3);
+				}
+			}
+			break;
+
+		case FLEX_CONVERSION_COMPLETE_3:
+			if (ext_signal & FLEX_TIMER_WAIT)
+			{
+				I2C_conversion_write(FLEX_TWO_ADDR);
+				set_flex_next_state(FLEX_READ_READY_3);
+			}
+			break;
+
+		case FLEX_READ_READY_3:
+			if (ext_signal & FLEX_TRANSFER_COMPLETE)
+			{
+				I2C_IntDisable(I2C0, I2C_FLAG_WRITE);
+				if (status != i2cTransferDone)
+				{
+					printf("Error occurred during I2C conversion write! Error code is %d\r\n",
+							status);
+					flex_power_off();
+					set_flex_next_state(FLEX_OFF);
+				}
+				else
+				{
+					I2C_read(FLEX_TWO_ADDR);
+					set_flex_next_state(FLEX_READ_COMPLETE_3);
+				}
+			}
+			break;
+
+		case FLEX_READ_COMPLETE_3:
+			if (ext_signal & FLEX_TRANSFER_COMPLETE)
+			{
+				I2C_IntDisable(I2C0, I2C_FLAG_READ);
+				if (status != i2cTransferDone)
+				{
+					printf("Error occurred during I2C read! Error code is %d\r\n",
+							status);
+				}
+				else
+				{
+					// Handle value
+//					printf("Finger 3: %d\r\n\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
+					if ((((read_buf[0] << 8) | read_buf[1]) >> 4) < BEND_THRESHOLD)
+					{
+						finger3 = 1;
+					}
+					if (finger1 && !finger2 && !finger3)
+					{
+						gecko_external_signal(FINGER1_FLEXED);
+					}
+					else if (!finger1 && finger2 && !finger3)
+					{
+						gecko_external_signal(FINGER2_FLEXED);
+					}
+					else if (!finger1 && !finger2 && finger3)
+					{
+						gecko_external_signal(FINGER3_FLEXED);
+					}
+					finger1 = 0;
+					finger2 = 0;
+					finger3 = 0;
+					set_flex_next_state(FLEX_OFF);
+				}
+			}
+			break;
+
 
 		default:
 			break;
@@ -302,7 +479,8 @@ void flex_sensor_init(void)
 {
 	// Flex sensor power pin
 	GPIO_PinModeSet(FLEX_PWR_PORT, FLEX_PWR_PIN, gpioModePushPull, false);
-	flex_power_on();
+	flex_power_off();
+
 	// Initialize I2C
 	I2CSPM_Init_TypeDef i2cInit = I2CSPM_INIT_DEFAULT;
 	I2CSPM_Init(&i2cInit);
@@ -310,21 +488,32 @@ void flex_sensor_init(void)
 }
 
 
-void reset_i2c_pins(void)
+/**
+ *
+ * @brief Reset I2C SDA and SCL pins of flex sensor as well as
+ *        flex sensor states after power cycle
+ *
+ */
+void reset_flex(void)
 {
+	// Reset flex sensor state machines
 	current_flex_state = FLEX_OFF;
 	next_flex_state    = FLEX_OFF;
+	finger1 = 0;
+	finger2 = 0;
+	finger3 = 0;
+
 	/* Output value must be set to 1 to not drive lines low. Set
 	 SCL first, to ensure it is high before changing SDA. */
-	GPIO_PinModeSet(gpioPortC, 10, gpioModeWiredAndPullUp, 1);
-	GPIO_PinModeSet(gpioPortC, 11, gpioModeWiredAndPullUp, 1);
+	GPIO_PinModeSet(SCL_PORT, SCL_PIN, gpioModeWiredAndPullUp, 1);
+	GPIO_PinModeSet(SDA_PORT, SDA_PIN, gpioModeWiredAndPullUp, 1);
 
 	/* In some situations, after a reset during an I2C transfer, the slave
 	 device may be left in an unknown state. Send 9 clock pulses to
 	 set slave in a defined state. */
 	for (int i = 0; i < 9; i++) {
-		GPIO_PinOutSet(gpioPortC, 10);
-		GPIO_PinOutClear(gpioPortC, 10);
+		GPIO_PinOutSet(SCL_PORT, SCL_PIN);
+		GPIO_PinOutClear(SCL_PORT, SCL_PIN);
 	}
 }
 

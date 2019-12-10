@@ -154,12 +154,12 @@ void LETIMER0_IRQHandler(void)
 	{
 		rollover_cnt++;
 		// Take accelerometer reading
-//		gecko_external_signal(ACC_MEASURE);
+		gecko_external_signal(ACC_MEASURE);
 		// Take flex sensor reading only if device is on
-//		if (device_state == DEVICE_ON)
-//		{
+		if (device_state == DEVICE_ON)
+		{
 			gecko_external_signal(FLEX_MEASURE);
-//		}
+		}
 	}
 	if (flags & LETIMER_IF_COMP0)
 	{

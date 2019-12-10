@@ -51,12 +51,20 @@
 // Currently only for 1 finger
 typedef enum
 {
-	FLEX_OFF                 = 0,
-	FLEX_POWER_ON            = 1,
-	FLEX_CONFIG_COMPLETE     = 2,
-	FLEX_CONVERSION_COMPLETE = 3,
-	FLEX_READ_READY          = 4,
-	FLEX_READ_COMPLETE       = 5,
+	FLEX_OFF                    = 0,
+	FLEX_POWER_ON               = 1,
+	FLEX_CONFIG_COMPLETE        = 2,
+	FLEX_CONVERSION_COMPLETE    = 3,
+	FLEX_READ_READY             = 4,
+	FLEX_READ_COMPLETE          = 5,
+	FLEX_CONFIG_COMPLETE_2      = 6,
+	FLEX_CONVERSION_COMPLETE_2  = 7,
+	FLEX_READ_READY_2           = 8,
+	FLEX_READ_COMPLETE_2        = 9,
+	FLEX_CONFIG_COMPLETE_3      = 10,
+	FLEX_CONVERSION_COMPLETE_3  = 11,
+	FLEX_READ_READY_3           = 12,
+	FLEX_READ_COMPLETE_3        = 13,
 } FLEX_STATE_e;
 
 

@@ -45,7 +45,10 @@ typedef enum
 	ACC_MEASURE_DONE       = BIT(4),
 	FLEX_MEASURE           = BIT(5),
 	FLEX_TIMER_WAIT        = BIT(6),
-	FLEX_TRANSFER_COMPLETE = BIT(7)
+	FLEX_TRANSFER_COMPLETE = BIT(7),
+	FINGER1_FLEXED         = BIT(8),
+	FINGER2_FLEXED         = BIT(9),
+	FINGER3_FLEXED         = BIT(10),
 } EXT_SIGNAL_e;
 
 typedef enum

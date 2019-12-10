@@ -88,6 +88,14 @@ DEVICE_STATE_e device_state = DEVICE_OFF;
 
 // Indicates how many LPNs are connected through friendship
 static uint8_t lpn_num = 0;
+
+typedef enum
+{
+	VOLT_INDEX,
+	PEOPLE_INDEX,
+	TEMP_INDEX,
+} INDEX_e;
+
 /*******************************************************************************
  * Function prototypes.
  ******************************************************************************/
@@ -245,15 +253,30 @@ static void client_request(uint16_t model_id,
 		uint16_t delay_ms,
 		uint8_t request_flags)
 {
-	printf("Handling client request\r\n");
 	// Display if button is pressed or released based on ON/OFF state
 	if (req->on_off == MESH_GENERIC_ON_OFF_STATE_ON)
 	{
-		// Based on client address Display LPN1 requests assistance
+		// Based on Generic ON/OFF server address display node requests assistance
+		if (server_addr == 0xC000)
+		{
+			DI_Print("LPN1 assist", 8);
+		}
+		else if (server_addr == 0xC001)
+		{
+			DI_Print("LPN2 assist", 9);
+		}
 	}
 	else if (req->on_off == MESH_GENERIC_ON_OFF_STATE_OFF)
 	{
-		// Patient 1 beyond help
+		// Patient beyond help
+		if (server_addr == 0xC000)
+		{
+			DI_Print("", 8);
+		}
+		else if (server_addr == 0xC001)
+		{
+			DI_Print("", 9);
+		}
 	}
 }
 
@@ -280,7 +303,7 @@ static void state_change(
  * Handling of boot event.
  * If needed it performs factory reset. In other case it sets device name
  * and initialize mesh node.
- ******************************************************************************/
+ ********************************i2c_pin**********************************************/
 static void handle_boot_event(void)
 {
 	uint16_t result;
@@ -551,11 +574,13 @@ void handle_timer_event(uint8_t handle)
  ******************************************************************************/
 void handle_external_signal_event(uint32_t signal)
 {
-	if (signal & PB0_PRESS) {
-		printf("PB0 pressed\r\n");
-		sensor_client_change_property();
-	}
-	if (signal & PB1_PRESS) {
+	// Pass in 0, 1, or 2 into sensor_client_change_property
+//	if (signal & PB0_PRESS) {
+//		printf("PB0 pressed\r\n");
+//		sensor_client_change_property();
+//	}
+	if (signal & PB1_PRESS)
+	{
 		printf("PB1 pressed\r\n");
 		sensor_client_publish_get_descriptor_request();
 		gecko_cmd_hardware_set_soft_timer(
@@ -563,12 +588,27 @@ void handle_external_signal_event(uint32_t signal)
 				TIMER_ID_SENSOR_DATA,
 				0);
 	}
+	if (signal & FINGER1_FLEXED)
+	{
+		printf("VOLTAGE/r/n");
+		sensor_client_change_property(VOLT_INDEX);
+	}
+	if (signal & FINGER2_FLEXED)
+	{
+		printf("PEOPLE/r/n");
+		sensor_client_change_property(PEOPLE_INDEX);
+	}
+	if (signal & FINGER3_FLEXED)
+	{
+		printf("TEMP/r/n");
+		sensor_client_change_property(TEMP_INDEX);
+	}
 	accelerometer_state_machine(signal);
-//	if (device_state == DEVICE_ON)
-//	{
+	if (device_state == DEVICE_ON)
+	{
 		// I2C state machine for flex sensors
 		flex_sensor_state_machine(signal);
-//	}
+	}
 }
 
 /***************************************************************************//**
