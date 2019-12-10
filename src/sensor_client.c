@@ -60,14 +60,14 @@ static const mesh_device_properties_t properties[PROPERTIES_NUMBER] = {
 void sensor_client_change_property(uint8_t index)
 {
 	current_property = index;
-	if (index < 2)
-	{
-		DI_Print("", DI_ROW_SENSOR_DATA);
-	}
-	else
-	{
-		DI_Print("", DI_ROW_SENSOR_DATA + 1);
-	}
+//	if (index < 2)
+//	{
+//		DI_Print("", DI_ROW_SENSOR_DATA);
+//	}
+//	else
+//	{
+//		DI_Print("", DI_ROW_SENSOR_DATA + 1);
+//	}
 	printf("New property ID is %4.4x\r\n", properties[current_property]);
 }
 
@@ -78,9 +78,9 @@ void sensor_client_change_property(uint8_t index)
 void sensor_client_publish_get_descriptor_request(void)
 {
 	registered_devices = 0;
-	for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
-		DI_Print("", DI_ROW_SENSOR_DATA + sensor);
-	}
+//	for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
+//		DI_Print("", DI_ROW_SENSOR_DATA + sensor);
+//	}
 	gecko_cmd_mesh_sensor_client_get_descriptor(
 			SENSOR_ELEMENT,
 			PUBLISH_ADDRESS,
@@ -136,7 +136,7 @@ void sensor_client_publish_get_request(void)
 void handle_sensor_client_status(
 		struct gecko_msg_mesh_sensor_client_status_evt_t *pEvt)
 {
-	printf("evt:gecko_evt_mesh_sensor_client_status_id\r\n");
+//	printf("evt:gecko_evt_mesh_sensor_client_status_id\r\n");
 	uint8_t *sensor_data = pEvt->sensor_data.data;
 	uint8_t data_len = pEvt->sensor_data.len;
 	uint8_t pos = 0;
@@ -154,49 +154,46 @@ void handle_sensor_client_status(
 						char tmp[21];
 						switch (property_id) {
 							case PEOPLE_COUNT:
-								printf("People count\r\n");
 								if (property_len == 2) {
 									mesh_device_property_t property = mesh_sensor_data_from_buf(PEOPLE_COUNT, property_data);
 									count16_t people_count = property.count16;
 									if (people_count == (count16_t)0xFFFF) {
-										snprintf(tmp, 21, "Adr %4x Count   N/K", address_table[sensor]);
+										snprintf(tmp, 21, "LPN2    Count   N/K");
 									} else {
-										snprintf(tmp, 21, "Adr %4x Count %5u", address_table[sensor], people_count);
+										snprintf(tmp, 21, "LPN2    Count %5u", people_count);
 									}
 								} else {
-									snprintf(tmp, 21, "Adr %4x Count   N/A", address_table[sensor]);
+									snprintf(tmp, 21, "LPN2    Count   N/A");
 								}
 								DI_Print(tmp, DI_ROW_SENSOR_DATA);
 								break;
 
 							case PRESENT_AMBIENT_TEMPERATURE:
-								printf("Temperature ambient\r\n");
 								if (property_len == 1) {
 									mesh_device_property_t property = mesh_sensor_data_from_buf(PRESENT_AMBIENT_TEMPERATURE, property_data);
 									temperature_8_t temperature = property.temperature_8;
 									if (temperature == (temperature_8_t)0xFF) {
-										snprintf(tmp, 21, "Adr %4x Temp    N/K", address_table[sensor]);
+										snprintf(tmp, 21, "LPN2    Temp    N/K");
 									} else {
-										snprintf(tmp, 21, "Adr %4x Temp %3d.%1dC", address_table[sensor], temperature / 2, (temperature * 5) % 10);
+										snprintf(tmp, 21, "LPN2 Temp %3d.%1dC", temperature / 2, (temperature * 5) % 10);
 									}
 								} else {
-									snprintf(tmp, 21, "Adr %4x Temp    N/A", address_table[sensor]);
+									snprintf(tmp, 21, "LPN2    Temp    N/A");
 								}
 								DI_Print(tmp, DI_ROW_SENSOR_DATA);
 								break;
 
 							case AVERAGE_OUTPUT_VOLTAGE:
-								printf("Output voltage\r\n");
-								if (property_len == 2) {
+								if (property_len == 3) {
 									mesh_device_property_t property = mesh_sensor_data_from_buf(AVERAGE_OUTPUT_VOLTAGE, property_data);
 									voltage_t voltage = property.voltage;
 									if (voltage == (voltage_t)0xFFFF) {
-										snprintf(tmp, 21, "Adr %4x ADC   N/K", address_table[sensor]);
+										snprintf(tmp, 21, "LPN1    Muscle   N/K");
 									} else {
-										snprintf(tmp, 21, "Adr %4x ADC %5u", address_table[sensor], voltage);
+										snprintf(tmp, 21, "LPN1    Muscle %5u", voltage);
 									}
 								} else {
-									snprintf(tmp, 21, "Adr %4x ADC   N/A", address_table[sensor]);
+									snprintf(tmp, 21, "LPN1    Muscle   N/A");
 								}
 								DI_Print(tmp, DI_ROW_SENSOR_DATA + 1);
 								break;

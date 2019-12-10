@@ -36,6 +36,7 @@
  * @{
  ******************************************************************************/
 
+// Enumerations for externals signals
 typedef enum
 {
 	PB0_PRESS              = BIT(0),

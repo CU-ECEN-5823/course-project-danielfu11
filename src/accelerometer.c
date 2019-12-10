@@ -286,6 +286,8 @@ void accelerometer_init(void)
 {
 	// Accelerator power pin
 	GPIO_PinModeSet(ACC_PWR_PORT, ACC_PWR_PIN, gpioModePushPull, false);
+	acc_power_off();
+	// Initialize ADC and LETIMER0
 	adc_init();
 	letimer_init();
 }

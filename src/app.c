@@ -67,6 +67,7 @@ typedef enum
 	TIMER_ID_PROVISIONING      = 66,
 	TIMER_ID_SENSOR_DATA       = 65,
 	TIMER_ID_SENSOR_DESCRIPTOR = 64,
+	TIMER_ID_SAVE_STATE        = 60,
 } TIMER_ID_e;
 
 #define TIMER_CLK_FREQ ((uint32_t)32768) ///< Timer Frequency used
@@ -89,12 +90,18 @@ DEVICE_STATE_e device_state = DEVICE_OFF;
 // Indicates how many LPNs are connected through friendship
 static uint8_t lpn_num = 0;
 
+// Index for traversing property id array
 typedef enum
 {
 	VOLT_INDEX,
 	PEOPLE_INDEX,
 	TEMP_INDEX,
 } INDEX_e;
+
+static PACKSTRUCT(struct assist_state {
+	uint8_t lpn1_assist;
+	uint8_t lpn2_assist;
+}) assist_state;
 
 /*******************************************************************************
  * Function prototypes.
@@ -226,6 +233,105 @@ static void set_device_name(bd_addr *pAddr)
 	DI_Print(name, DI_ROW_NAME);
 }
 
+
+/***************************************************************************//**
+ * This function loads the saved assistance state from Persistent Storage and
+ * copies the data in the global variable assist_state.
+ * If PS key with ID 0x4004 does not exist or loading failed,
+ * assist_state is set to zero and some default values are written to it.
+ *
+ * @return 0 if loading succeeds. -1 if loading fails.
+ ******************************************************************************/
+static int assist_state_load(void)
+{
+	struct gecko_msg_flash_ps_load_rsp_t* pLoad;
+
+	pLoad = gecko_cmd_flash_ps_load(0x4004);
+
+	// Set default values if ps_load fail or size of assist_state has changed
+	if (pLoad->result || (pLoad->value.len != sizeof(struct assist_state))) {
+		memset(&assist_state, 0, sizeof(struct assist_state));
+		assist_state.lpn1_assist = 0;
+		assist_state.lpn2_assist = 0;
+		return -1;
+	}
+
+	memcpy(&assist_state, pLoad->value.data, pLoad->value.len);
+
+	printf("Assistance state restored! lpn1: %d, lpn2: %d\r\n",
+			assist_state.lpn1_assist, assist_state.lpn2_assist);
+
+	return 0;
+}
+
+
+/***************************************************************************//**
+ * This function saves the current assistance state in Persistent Storage
+ * so that the data is preserved over reboots and power cycles.
+ * The light state is hold in a global variable assist_state.
+ * A PS key with ID 0x4004 is used to store the whole struct.
+ *
+ * @return 0 if saving succeed, -1 if saving fails.
+ ******************************************************************************/
+static int assist_state_store(void)
+{
+	struct gecko_msg_flash_ps_save_rsp_t* pSave;
+
+	pSave = gecko_cmd_flash_ps_save(0x4004, sizeof(struct assist_state), (const uint8*)&assist_state);
+
+	if (pSave->result) {
+		printf("lightbulb_state_store(): PS save failed, code %x\r\n", pSave->result);
+		return(-1);
+	}
+
+	return 0;
+}
+
+
+/**
+ *
+ * Assistance state initialization
+ * Called when node is initialized
+ * Or when provisioning is completed
+ *
+ */
+static void assist_state_init(void)
+{
+	memset(&assist_state, 0, sizeof(struct assist_state));
+
+	if (assist_state_load() != 0)
+	{
+		printf("assist_state_load() failed, using defaults\r\n");
+	}
+}
+
+/***************************************************************************//**
+ * This function is called each time the assist state in RAM is changed.
+ * It sets up a soft timer that will save the state in flash after small delay.
+ * The purpose is to reduce amount of unnecessary flash writes.
+ ******************************************************************************/
+static void assist_state_changed(void)
+{
+	if (assist_state.lpn1_assist == 1)
+	{
+		DI_Print("LPN1 assistance", 8);
+	}
+	else
+	{
+		DI_Print("", 8);
+	}
+
+	if (assist_state.lpn2_assist == 1)
+	{
+		DI_Print("LPN2 assistance", 9);
+	}
+	else
+	{
+		DI_Print("", 9);
+	}
+	gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(5000), TIMER_ID_SAVE_STATE, 1);
+}
+
 /**
  *
  * @brief Client request handler for generic server model
@@ -259,25 +365,26 @@ static void client_request(uint16_t model_id,
 		// Based on Generic ON/OFF server address display node requests assistance
 		if (server_addr == 0xC000)
 		{
-			DI_Print("LPN1 assist", 8);
+			assist_state.lpn1_assist = 1;
 		}
 		else if (server_addr == 0xC001)
 		{
-			DI_Print("LPN2 assist", 9);
+			assist_state.lpn2_assist = 1;
 		}
 	}
 	else if (req->on_off == MESH_GENERIC_ON_OFF_STATE_OFF)
 	{
-		// Patient beyond help
+		// Patient no longer requires assistance
 		if (server_addr == 0xC000)
 		{
-			DI_Print("", 8);
+			assist_state.lpn1_assist = 0;
 		}
 		else if (server_addr == 0xC001)
 		{
-			DI_Print("", 9);
+			assist_state.lpn2_assist = 0;
 		}
 	}
+	assist_state_changed();
 }
 
 /**
@@ -296,7 +403,6 @@ static void state_change(
 		const struct mesh_generic_state *target,
 		uint32_t remaining_ms)
 {
-	// Left empty
 }
 
 /***************************************************************************//**
@@ -369,6 +475,7 @@ static void handle_node_initialized_event(
 
 		gecko_cmd_mesh_sensor_client_init();
 		enable_button_interrupts();
+		assist_state_init();
 		gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(100),
 				TIMER_ID_SENSOR_DESCRIPTOR,
 				1);
@@ -394,73 +501,74 @@ static void handle_node_initialized_event(
 void handle_node_provisioning_events(struct gecko_cmd_packet *pEvt)
 {
 	switch (BGLIB_MSG_ID(pEvt->header)) {
-	case gecko_evt_mesh_node_provisioning_started_id:
-		printf("Started provisioning\r\n");
-		DI_Print("provisioning...", DI_ROW_STATUS);
-#ifdef FEATURE_LED_BUTTON_ON_SAME_PIN
-		led_init(); /* shared GPIO pins used as LED output */
-#endif
-		// start timer for blinking LEDs to indicate which node is being provisioned
-		gecko_cmd_hardware_set_soft_timer(
-				TIMER_MS_2_TICKS(250),
-				TIMER_ID_PROVISIONING,
-				0);
-		break;
+		case gecko_evt_mesh_node_provisioning_started_id:
+			printf("Started provisioning\r\n");
+			DI_Print("provisioning...", DI_ROW_STATUS);
+	#ifdef FEATURE_LED_BUTTON_ON_SAME_PIN
+			led_init(); /* shared GPIO pins used as LED output */
+	#endif
+			// start timer for blinking LEDs to indicate which node is being provisioned
+			gecko_cmd_hardware_set_soft_timer(
+					TIMER_MS_2_TICKS(250),
+					TIMER_ID_PROVISIONING,
+					0);
+			break;
 
-	case gecko_evt_mesh_node_provisioned_id:
-		gecko_cmd_mesh_generic_server_init();
-		/* Initialize mesh lib */
-		mesh_lib_init(malloc, free, 9);
-		// Set generic on/off server model
-		mesh_lib_generic_server_register_handler(
-				MESH_GENERIC_ON_OFF_SERVER_MODEL_ID,
-				0,
-				client_request,
-				state_change);
+		case gecko_evt_mesh_node_provisioned_id:
+			gecko_cmd_mesh_generic_server_init();
+			/* Initialize mesh lib */
+			mesh_lib_init(malloc, free, 9);
+			// Set generic on/off server model
+			mesh_lib_generic_server_register_handler(
+					MESH_GENERIC_ON_OFF_SERVER_MODEL_ID,
+					0,
+					client_request,
+					state_change);
 
-		// Server publish
-		mesh_lib_generic_server_publish(
-				MESH_GENERIC_ON_OFF_SERVER_MODEL_ID,
-				0,
-				mesh_generic_state_on_off);
+			// Server publish
+			mesh_lib_generic_server_publish(
+					MESH_GENERIC_ON_OFF_SERVER_MODEL_ID,
+					0,
+					mesh_generic_state_on_off);
 
-		uint16_t res;
-		//Initialize Friend functionality
-		printf("Friend mode initialization\r\n");
-		res = gecko_cmd_mesh_friend_init()->result;
-		if (res) {
-			printf("Friend init failed 0x%x\r\n", res);
-		}
-		gecko_cmd_mesh_sensor_client_init();
-		printf("node provisioned, got address=%x, ivi:%ld\r\n",
-				pEvt->data.evt_mesh_node_provisioned.address,
-				pEvt->data.evt_mesh_node_provisioned.iv_index);
-		// stop LED blinking when provisioning complete
-		gecko_cmd_hardware_set_soft_timer(TIMER_REMOVE, TIMER_ID_PROVISIONING, 0);
-		led_set_state(LED_STATE_OFF);
-		DI_Print("provisioned", DI_ROW_STATUS);
-#ifdef FEATURE_LED_BUTTON_ON_SAME_PIN
-		button_init(); /* shared GPIO pins used as button input */
-#endif
-		enable_button_interrupts();
-		gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(20000),
-				TIMER_ID_SENSOR_DESCRIPTOR,
-				1);
-		init_done = 1;
-		break;
+			uint16_t res;
+			//Initialize Friend functionality
+			printf("Friend mode initialization\r\n");
+			res = gecko_cmd_mesh_friend_init()->result;
+			if (res) {
+				printf("Friend init failed 0x%x\r\n", res);
+			}
+			gecko_cmd_mesh_sensor_client_init();
+			printf("node provisioned, got address=%x, ivi:%ld\r\n",
+					pEvt->data.evt_mesh_node_provisioned.address,
+					pEvt->data.evt_mesh_node_provisioned.iv_index);
+			// stop LED blinking when provisioning complete
+			gecko_cmd_hardware_set_soft_timer(TIMER_REMOVE, TIMER_ID_PROVISIONING, 0);
+			led_set_state(LED_STATE_OFF);
+			DI_Print("provisioned", DI_ROW_STATUS);
+	#ifdef FEATURE_LED_BUTTON_ON_SAME_PIN
+			button_init(); /* shared GPIO pins used as button input */
+	#endif
+			enable_button_interrupts();
+			assist_state_init();
+			gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(20000),
+					TIMER_ID_SENSOR_DESCRIPTOR,
+					1);
+			init_done = 1;
+			break;
 
-	case gecko_evt_mesh_node_provisioning_failed_id:
-		printf("provisioning failed, code %x\r\n",
-				pEvt->data.evt_mesh_node_provisioning_failed.result);
-		DI_Print("prov failed", DI_ROW_STATUS);
-		// start a one-shot timer that will trigger soft reset after small delay
-		gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(2000),
-				TIMER_ID_RESTART,
-				1);
-		break;
+		case gecko_evt_mesh_node_provisioning_failed_id:
+			printf("provisioning failed, code %x\r\n",
+					pEvt->data.evt_mesh_node_provisioning_failed.result);
+			DI_Print("prov failed", DI_ROW_STATUS);
+			// start a one-shot timer that will trigger soft reset after small delay
+			gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(2000),
+					TIMER_ID_RESTART,
+					1);
+			break;
 
-	default:
-		break;
+		default:
+			break;
 	}
 }
 
@@ -476,38 +584,38 @@ void handle_node_provisioning_events(struct gecko_cmd_packet *pEvt)
 void handle_le_connection_events(struct gecko_cmd_packet *pEvt)
 {
 	switch (BGLIB_MSG_ID(pEvt->header)) {
-	case gecko_evt_le_connection_opened_id:
-		printf("evt:gecko_evt_le_connection_opened_id\r\n");
-		num_connections++;
-		conn_handle = pEvt->data.evt_le_connection_opened.connection;
-		DI_Print("connected", DI_ROW_CONNECTION);
-		break;
+		case gecko_evt_le_connection_opened_id:
+			printf("evt:gecko_evt_le_connection_opened_id\r\n");
+			num_connections++;
+			conn_handle = pEvt->data.evt_le_connection_opened.connection;
+			DI_Print("connected", DI_ROW_CONNECTION);
+			break;
 
-	case gecko_evt_le_connection_parameters_id:
-		printf("evt:gecko_evt_le_connection_parameters_id: interval %u, latency %u, timeout %u\r\n",
-				pEvt->data.evt_le_connection_parameters.interval,
-				pEvt->data.evt_le_connection_parameters.latency,
-				pEvt->data.evt_le_connection_parameters.timeout);
-		break;
+		case gecko_evt_le_connection_parameters_id:
+			printf("evt:gecko_evt_le_connection_parameters_id: interval %u, latency %u, timeout %u\r\n",
+					pEvt->data.evt_le_connection_parameters.interval,
+					pEvt->data.evt_le_connection_parameters.latency,
+					pEvt->data.evt_le_connection_parameters.timeout);
+			break;
 
-	case gecko_evt_le_connection_closed_id:
-		// Check if need to boot to dfu mode
-		if (boot_to_dfu) {
-			// Enter to DFU OTA mode
-			gecko_cmd_system_reset(2);
-		}
-		printf("evt:conn closed, reason 0x%x\r\n",
-				pEvt->data.evt_le_connection_closed.reason);
-		conn_handle = 0xFF;
-		if (num_connections > 0) {
-			if (--num_connections == 0) {
-				DI_Print("", DI_ROW_CONNECTION);
+		case gecko_evt_le_connection_closed_id:
+			// Check if need to boot to dfu mode
+			if (boot_to_dfu) {
+				// Enter to DFU OTA mode
+				gecko_cmd_system_reset(2);
 			}
-		}
-		break;
+			printf("evt:conn closed, reason 0x%x\r\n",
+					pEvt->data.evt_le_connection_closed.reason);
+			conn_handle = 0xFF;
+			if (num_connections > 0) {
+				if (--num_connections == 0) {
+					DI_Print("", DI_ROW_CONNECTION);
+				}
+			}
+			break;
 
-	default:
-		break;
+		default:
+			break;
 	}
 }
 
@@ -536,34 +644,38 @@ void enter_to_dfu_ota(uint8_t connection)
 void handle_timer_event(uint8_t handle)
 {
 	switch (handle) {
-	case TIMER_ID_FACTORY_RESET:
-		gecko_cmd_system_reset(0);
-		break;
+		case TIMER_ID_FACTORY_RESET:
+			gecko_cmd_system_reset(0);
+			break;
 
-	case TIMER_ID_RESTART:
-		gecko_cmd_system_reset(0);
-		break;
+		case TIMER_ID_RESTART:
+			gecko_cmd_system_reset(0);
+			break;
 
-	case TIMER_ID_PROVISIONING:
-		if (!init_done) {
-			led_set_state(LED_STATE_PROV);
-		}
-		break;
+		case TIMER_ID_PROVISIONING:
+			if (!init_done) {
+				led_set_state(LED_STATE_PROV);
+			}
+			break;
 
-	case TIMER_ID_SENSOR_DESCRIPTOR:
-		sensor_client_publish_get_descriptor_request();
-		gecko_cmd_hardware_set_soft_timer(
-				TIMER_MS_2_TICKS(2000),
-				TIMER_ID_SENSOR_DATA,
-				0);
-		break;
+		case TIMER_ID_SENSOR_DESCRIPTOR:
+			sensor_client_publish_get_descriptor_request();
+			gecko_cmd_hardware_set_soft_timer(
+					TIMER_MS_2_TICKS(2000),
+					TIMER_ID_SENSOR_DATA,
+					0);
+			break;
 
-	case TIMER_ID_SENSOR_DATA:
-		sensor_client_publish_get_request();
-		break;
+		case TIMER_ID_SENSOR_DATA:
+			sensor_client_publish_get_request();
+			break;
 
-	default:
-		break;
+		case TIMER_ID_SAVE_STATE:
+			assist_state_store();
+			break;
+
+		default:
+			break;
 	}
 }
 
@@ -574,14 +686,8 @@ void handle_timer_event(uint8_t handle)
  ******************************************************************************/
 void handle_external_signal_event(uint32_t signal)
 {
-	// Pass in 0, 1, or 2 into sensor_client_change_property
-//	if (signal & PB0_PRESS) {
-//		printf("PB0 pressed\r\n");
-//		sensor_client_change_property();
-//	}
 	if (signal & PB1_PRESS)
 	{
-		printf("PB1 pressed\r\n");
 		sensor_client_publish_get_descriptor_request();
 		gecko_cmd_hardware_set_soft_timer(
 				TIMER_MS_2_TICKS(2000),

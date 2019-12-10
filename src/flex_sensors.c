@@ -23,7 +23,7 @@
 // Conversion time 1/sampling rate
 #define CONVERSION_WAIT    9
 // I2C slave addresses for each flex sensor
-#define FLEX_ONE_ADDR      0x48 // Default GND
+#define FLEX_ONE_ADDR      0x48 // GND (default)
 #define FLEX_TWO_ADDR      0x49 // VDD
 // Flex sensors power pin PC6
 #define FLEX_PWR_PORT      gpioPortC
@@ -33,7 +33,8 @@
 #define SDA_PORT           gpioPortC
 #define SDA_PIN            11
 
-#define BEND_THRESHOLD     850
+// ADC threshold value to determine a bend in a finger
+#define BEND_THRESHOLD     800
 
 // I2C register addresses
 #define CONFIG_REGISTER        0x01
@@ -47,9 +48,11 @@
 #define ADS1015_CONFIG_PGA_23  0x0080
 #define DISABLE_COMP           BIT(1) | BIT(0)
 
+// Macros to differentiate between the 2 flex sensors on each board
 #define SENSOR_1               1
 #define SENSOR_2               2
 
+// 16 bit values to write to the configuration register
 #define SENSOR_1_CONFIG        (SINGLE_SHOT | START_CONVERSION | \
 		                        ADC_CHANNEL_0 | SAMPLE_RATE_128HZ | \
 								ADS1015_CONFIG_PGA_23 | DISABLE_COMP)
@@ -74,6 +77,7 @@ static const uint8_t write_config_buf_2[3]= {CONFIG_REGISTER,
 									         SENSOR_2_CONFIG & 0x00FF};
 static const uint8_t write_convert_buf[1] = {CONVERSION_REGISTER};
 
+// Indicates the state of each finger, 0 = straight / 1 = bent
 static uint8_t finger1 = 0;
 static uint8_t finger2 = 0;
 static uint8_t finger3 = 0;
@@ -122,18 +126,18 @@ static void set_flex_next_state(FLEX_STATE_e new_state)
  *
  * @brief Send a write command to config register
  * @param addr    7 bit I2C address to write to
- *        sensor  which sensor to config 1 or 2
+ *        sensor  Which sensor to config SENSOR_1 or SENSOR_2
  *
  */
 static void I2C_config_write(uint16_t addr, uint8_t sensor)
 {
 	write_cmd.addr = addr << 1;
 	write_cmd.flags = I2C_FLAG_WRITE;
-	if (sensor == 1)
+	if (sensor == SENSOR_1)
 	{
 		write_cmd.buf[0].data = write_config_buf_1;
 	}
-	else
+	else if (sensor == SENSOR_2)
 	{
 		write_cmd.buf[0].data = write_config_buf_2;
 	}
@@ -292,7 +296,6 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 				else
 				{
 					// Handle value
-//					printf("Finger 1: %d\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
 					if ((((read_buf[0] << 8) | read_buf[1]) >> 4) < BEND_THRESHOLD)
 					{
 						finger1 = 1;
@@ -361,7 +364,6 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 				else
 				{
 					// Handle value
-//					printf("Finger 2: %d\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
 					if ((((read_buf[0] << 8) | read_buf[1]) >> 4) < BEND_THRESHOLD)
 					{
 						finger2 = 1;
@@ -430,7 +432,6 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 				else
 				{
 					// Handle value
-//					printf("Finger 3: %d\r\n\r\n", ((read_buf[0] << 8) | read_buf[1]) >> 4);
 					if ((((read_buf[0] << 8) | read_buf[1]) >> 4) < BEND_THRESHOLD)
 					{
 						finger3 = 1;
@@ -481,7 +482,7 @@ void flex_sensor_init(void)
 	GPIO_PinModeSet(FLEX_PWR_PORT, FLEX_PWR_PIN, gpioModePushPull, false);
 	flex_power_off();
 
-	// Initialize I2C
+	// Initialize I2C0
 	I2CSPM_Init_TypeDef i2cInit = I2CSPM_INIT_DEFAULT;
 	I2CSPM_Init(&i2cInit);
 	NVIC_EnableIRQ(I2C0_IRQn);
