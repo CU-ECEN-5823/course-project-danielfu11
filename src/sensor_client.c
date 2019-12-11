@@ -49,9 +49,9 @@ static uint16_t address_table[DISPLAYED_SENSORS];
 static uint8_t current_property = 0;
 /// Property IDs supported by application
 static const mesh_device_properties_t properties[PROPERTIES_NUMBER] = {
-		AVERAGE_OUTPUT_VOLTAGE,
-		PEOPLE_COUNT,
-		PRESENT_AMBIENT_TEMPERATURE
+		AVERAGE_OUTPUT_VOLTAGE,      // Muscle activity metric
+		PEOPLE_COUNT,                // Heart rate in BPM
+		PRESENT_AMBIENT_TEMPERATURE  // Body temperature
 };
 
 /*******************************************************************************
@@ -60,15 +60,6 @@ static const mesh_device_properties_t properties[PROPERTIES_NUMBER] = {
 void sensor_client_change_property(uint8_t index)
 {
 	current_property = index;
-//	if (index < 2)
-//	{
-//		DI_Print("", DI_ROW_SENSOR_DATA);
-//	}
-//	else
-//	{
-//		DI_Print("", DI_ROW_SENSOR_DATA + 1);
-//	}
-	printf("New property ID is %4.4x\r\n", properties[current_property]);
 }
 
 /*******************************************************************************
@@ -78,9 +69,6 @@ void sensor_client_change_property(uint8_t index)
 void sensor_client_publish_get_descriptor_request(void)
 {
 	registered_devices = 0;
-//	for (uint8_t sensor = 0; sensor < DISPLAYED_SENSORS; sensor++) {
-//		DI_Print("", DI_ROW_SENSOR_DATA + sensor);
-//	}
 	gecko_cmd_mesh_sensor_client_get_descriptor(
 			SENSOR_ELEMENT,
 			PUBLISH_ADDRESS,
@@ -101,7 +89,6 @@ void handle_sensor_client_descriptor_status(
 
 	sensor_descriptor_t descriptor;
 	if (pEvt->descriptors.len >= SIZE_OF_DESCRIPTOR) {
-		printf("Yeayup/r/n");
 		mesh_lib_sensor_descriptors_from_buf(&descriptor,
 				pEvt->descriptors.data,
 				SIZE_OF_DESCRIPTOR);
@@ -136,7 +123,6 @@ void sensor_client_publish_get_request(void)
 void handle_sensor_client_status(
 		struct gecko_msg_mesh_sensor_client_status_evt_t *pEvt)
 {
-//	printf("evt:gecko_evt_mesh_sensor_client_status_id\r\n");
 	uint8_t *sensor_data = pEvt->sensor_data.data;
 	uint8_t data_len = pEvt->sensor_data.len;
 	uint8_t pos = 0;

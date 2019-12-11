@@ -69,13 +69,13 @@ volatile static I2C_TransferReturn_TypeDef	status;
 static I2C_TransferSeq_TypeDef write_cmd;
 static I2C_TransferSeq_TypeDef read_cmd;
 static uint8_t read_buf[2]; // {MSB, LSB}
-static const uint8_t write_config_buf_1[3]= {CONFIG_REGISTER,
+static uint8_t write_config_buf_1[3]= {CONFIG_REGISTER,
 		                                     (SENSOR_1_CONFIG & 0xFF00) >> 8,
 									         SENSOR_1_CONFIG & 0x00FF};
-static const uint8_t write_config_buf_2[3]= {CONFIG_REGISTER,
+static uint8_t write_config_buf_2[3]= {CONFIG_REGISTER,
 		                                     (SENSOR_2_CONFIG & 0xFF00) >> 8,
 									         SENSOR_2_CONFIG & 0x00FF};
-static const uint8_t write_convert_buf[1] = {CONVERSION_REGISTER};
+static uint8_t write_convert_buf[1] = {CONVERSION_REGISTER};
 
 // Indicates the state of each finger, 0 = straight / 1 = bent
 static uint8_t finger1 = 0;
@@ -448,11 +448,13 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 					{
 						gecko_external_signal(FINGER3_FLEXED);
 					}
+					// Reset finger states
 					finger1 = 0;
 					finger2 = 0;
 					finger3 = 0;
-					set_flex_next_state(FLEX_OFF);
 				}
+				flex_power_off();
+				set_flex_next_state(FLEX_OFF);
 			}
 			break;
 
@@ -464,8 +466,6 @@ void flex_sensor_state_machine(uint32_t ext_signal)
 	// Transition to the next state
 	if (current_flex_state != next_flex_state)
 	{
-//		printf("State %d transitioned to State %d\r\n",
-//				current_flex_state, next_flex_state);
 		set_flex_current_state(next_flex_state);
 	}
 }

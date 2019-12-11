@@ -98,9 +98,12 @@ typedef enum
 	TEMP_INDEX,
 } INDEX_e;
 
+// Data structure to store into persistent storage
 static PACKSTRUCT(struct assist_state {
-	uint8_t lpn1_assist;
-	uint8_t lpn2_assist;
+	uint8_t lpn1_assist_current;
+	uint8_t lpn1_assist_target;
+	uint8_t lpn2_assist_current;
+	uint8_t lpn2_assist_target;
 }) assist_state;
 
 /*******************************************************************************
@@ -148,8 +151,7 @@ void appMain(gecko_configuration_t *pConfig)
 	RETARGET_SerialCrLf(true);
 	DI_Init();
 
-	// Initialize LEDs and buttons
-	led_init();
+	// Initialize buttons
 	button_init();
 
 	// Initialize accelerometer and flex sensors
@@ -251,15 +253,17 @@ static int assist_state_load(void)
 	// Set default values if ps_load fail or size of assist_state has changed
 	if (pLoad->result || (pLoad->value.len != sizeof(struct assist_state))) {
 		memset(&assist_state, 0, sizeof(struct assist_state));
-		assist_state.lpn1_assist = 0;
-		assist_state.lpn2_assist = 0;
+		assist_state.lpn1_assist_current = 0;
+		assist_state.lpn2_assist_current = 0;
+		assist_state.lpn1_assist_target = 0;
+		assist_state.lpn2_assist_target = 0;
 		return -1;
 	}
 
 	memcpy(&assist_state, pLoad->value.data, pLoad->value.len);
 
 	printf("Assistance state restored! lpn1: %d, lpn2: %d\r\n",
-			assist_state.lpn1_assist, assist_state.lpn2_assist);
+			assist_state.lpn1_assist_current, assist_state.lpn2_assist_current);
 
 	return 0;
 }
@@ -280,9 +284,12 @@ static int assist_state_store(void)
 	pSave = gecko_cmd_flash_ps_save(0x4004, sizeof(struct assist_state), (const uint8*)&assist_state);
 
 	if (pSave->result) {
-		printf("lightbulb_state_store(): PS save failed, code %x\r\n", pSave->result);
+		printf("assist_state_store(): PS save failed, code %x\r\n", pSave->result);
 		return(-1);
 	}
+
+	printf("Assistance state stored lpn1: %d, lpn2: %d\r\n",
+				assist_state.lpn1_assist_current, assist_state.lpn2_assist_current);
 
 	return 0;
 }
@@ -312,23 +319,8 @@ static void assist_state_init(void)
  ******************************************************************************/
 static void assist_state_changed(void)
 {
-	if (assist_state.lpn1_assist == 1)
-	{
-		DI_Print("LPN1 assistance", 8);
-	}
-	else
-	{
-		DI_Print("", 8);
-	}
-
-	if (assist_state.lpn2_assist == 1)
-	{
-		DI_Print("LPN2 assistance", 9);
-	}
-	else
-	{
-		DI_Print("", 9);
-	}
+	assist_state.lpn1_assist_current = assist_state.lpn1_assist_target;
+	assist_state.lpn2_assist_current = assist_state.lpn2_assist_target;
 	gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(5000), TIMER_ID_SAVE_STATE, 1);
 }
 
@@ -365,11 +357,13 @@ static void client_request(uint16_t model_id,
 		// Based on Generic ON/OFF server address display node requests assistance
 		if (server_addr == 0xC000)
 		{
-			assist_state.lpn1_assist = 1;
+			assist_state.lpn1_assist_target = 1;
+			DI_Print("LPN1 assistance", 8);
 		}
 		else if (server_addr == 0xC001)
 		{
-			assist_state.lpn2_assist = 1;
+			assist_state.lpn2_assist_target = 1;
+			DI_Print("LPN2 assistance", 9);
 		}
 	}
 	else if (req->on_off == MESH_GENERIC_ON_OFF_STATE_OFF)
@@ -377,14 +371,22 @@ static void client_request(uint16_t model_id,
 		// Patient no longer requires assistance
 		if (server_addr == 0xC000)
 		{
-			assist_state.lpn1_assist = 0;
+			assist_state.lpn1_assist_target = 0;
+			DI_Print("", 8);
 		}
 		else if (server_addr == 0xC001)
 		{
-			assist_state.lpn2_assist = 0;
+			assist_state.lpn2_assist_target = 0;
+			DI_Print("", 9);
 		}
 	}
-	assist_state_changed();
+	// If the assistance state changed, update persistent storage
+	if (assist_state.lpn1_assist_target != assist_state.lpn1_assist_current ||
+		assist_state.lpn2_assist_target != assist_state.lpn2_assist_current)
+	{
+		printf("State changed\r\n");
+		assist_state_changed();
+	}
 }
 
 /**
@@ -546,9 +548,7 @@ void handle_node_provisioning_events(struct gecko_cmd_packet *pEvt)
 			gecko_cmd_hardware_set_soft_timer(TIMER_REMOVE, TIMER_ID_PROVISIONING, 0);
 			led_set_state(LED_STATE_OFF);
 			DI_Print("provisioned", DI_ROW_STATUS);
-	#ifdef FEATURE_LED_BUTTON_ON_SAME_PIN
-			button_init(); /* shared GPIO pins used as button input */
-	#endif
+
 			enable_button_interrupts();
 			assist_state_init();
 			gecko_cmd_hardware_set_soft_timer(TIMER_MS_2_TICKS(20000),
@@ -696,19 +696,17 @@ void handle_external_signal_event(uint32_t signal)
 	}
 	if (signal & FINGER1_FLEXED)
 	{
-		printf("VOLTAGE/r/n");
 		sensor_client_change_property(VOLT_INDEX);
 	}
 	if (signal & FINGER2_FLEXED)
 	{
-		printf("PEOPLE/r/n");
 		sensor_client_change_property(PEOPLE_INDEX);
 	}
 	if (signal & FINGER3_FLEXED)
 	{
-		printf("TEMP/r/n");
 		sensor_client_change_property(TEMP_INDEX);
 	}
+	// Accelerometer state machine
 	accelerometer_state_machine(signal);
 	if (device_state == DEVICE_ON)
 	{

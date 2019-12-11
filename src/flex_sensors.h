@@ -80,6 +80,6 @@ void flex_sensor_state_machine(uint32_t ext_signal);
 
 void flex_sensor_init(void);
 
-void reset_i2c_pins(void);
+void reset_flex(void);
 
 #endif /* __SRC_FLEX_SENSORS_H__ */

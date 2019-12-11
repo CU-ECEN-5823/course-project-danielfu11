@@ -146,13 +146,16 @@ uint32_t timerGetRunTimeMilliseconds(void)
  */
 void LETIMER0_IRQHandler(void)
 {
+	CORE_DECLARE_IRQ_STATE;
 	uint32_t flags = LETIMER_IntGet(LETIMER0);
 	// Clear all interrupts
 	LETIMER_IntClear(LETIMER0, _LETIMER_IF_MASK);
 	// Set LETIMER event flag
 	if (flags & LETIMER_IF_UF)
 	{
+		CORE_ENTER_CRITICAL();
 		rollover_cnt++;
+		CORE_ENTER_CRITICAL();
 		// Take accelerometer reading
 		gecko_external_signal(ACC_MEASURE);
 		// Take flex sensor reading only if device is on

@@ -52,6 +52,7 @@ typedef enum
 	FINGER3_FLEXED         = BIT(10),
 } EXT_SIGNAL_e;
 
+// Device OFF means flex sensors are off
 typedef enum
 {
 	DEVICE_OFF,
